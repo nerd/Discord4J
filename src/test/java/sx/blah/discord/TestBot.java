@@ -96,6 +96,7 @@ public class TestBot {
             roleIds.put("+voice-afk", "105545135281934336");
             roleIds.put("@banned", "105080701279301632");
             roleIds.put("@chatbanned", "106593527282077696");
+            roleIds.put("hidden", "107046822815477760");
 
             String bannedWords = "nigger nigga nig niqqa niglet negro negroid nigglet niggroids nignog nog";
 
@@ -254,7 +255,26 @@ public class TestBot {
                         } catch (Exception e) {
                             // e.printStackTrace();
                         }
-                    } else if(m.getContent().startsWith("!hide") || m.getContent().startsWith("!afk")) {
+                    } else if (m.getContent().startsWith(("!hide"))) {
+                        try {
+                            m.getAuthor().setPresence(Presences.OFFLINE);
+                            if (m.getAuthor().getRoles().contains(roleIds.get("hidden"))) {
+                                ArrayList<String> roles = m.getAuthor().getRoles();
+                                roles.remove(roleIds.get("hidden"));
+                                m.getAuthor().setRoles(roles);
+                                fixUsersRoles();
+                                DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), m.getAuthor(), roles);
+                            } else {
+                                // TODO: load and store the roles for when not hidden.
+                                ArrayList<String> roles = new ArrayList<>();
+                                roles.add(roleIds.get("hidden"));
+                                DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), m.getAuthor(), roles);
+                            }
+                        } catch (Exception e) {
+
+                        }
+                    } else if(m.getContent().startsWith("!afk") || m.getContent().startsWith("!return")) {
+                        // go to afk room or return to lobby with return. just toggles the states, but both make sense
                         try {
                             if (m.getAuthor().getPresence() == Presences.ONLINE) {
                                 m.getAuthor().setPresence(Presences.OFFLINE);
@@ -388,6 +408,45 @@ public class TestBot {
                         } catch (Exception e) {
                             // e.printStackTrace();
                         }
+                    } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!rank ")) {
+                        try {
+                            String[] args = m.getContent().split(" ", 4);
+                            String addRemoveRole = args[1];
+                            String roleName = args[2];
+                            String userName = args[3];
+
+                            //System.out.println(addRemoveRole+roleName+userName);
+
+                            for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
+                                // search all users in the room starting with characters in name, do not allow revoking
+                                // of privileges from the bot creator.
+                                if (u.getName().startsWith(userName) && (m.getAuthor().getID().equals(u.getID()) || !u.getID().contains("102483019427770368"))) {
+                                    ArrayList<String> roles = u.getRoles();
+                                    String beornot = "";
+
+                                    if (addRemoveRole.startsWith("+")) {
+                                        roles.add(roleIds.get(roleName));
+                                        u.setRoles(roles);
+                                        beornot = "to have";
+                                    } else if (addRemoveRole.startsWith("-")) {
+                                        try {
+                                            roles.remove(roleIds.get(roleName));
+                                            roles.remove(roleIds.get(roleName+"-afk"));
+                                            u.setRoles(roles);
+                                            beornot = "to no longer have";
+                                        } catch (Exception e) {
+                                            // e.printStackTrace();
+                                        }
+                                    }
+                                    DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** set **" + u.getName() + "** "+beornot+" "+roleName+" rights.", m.getChannel().getID());
+                                }
+                            }
+
+
+                        } catch (Exception e) {
+                            // e.printStackTrace();
+                        }
                     }
 
                     try {
@@ -403,22 +462,31 @@ public class TestBot {
                     for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
                         ArrayList<String> roles = new ArrayList<>();
 
+                        String rolestring = "";
+
                         // first set the roles based off of the 3 main categories of user
                         if (admins.contains(u.getID()))
-                            roles.add(roleIds.get("@admin"));
+                            rolestring = "@admin";
                         else if (banList.contains(u.getID()))
-                            roles.add(roleIds.get("@banned"));
+                            rolestring = "@banned";
                         else if (mods.contains(u.getID()))
-                            roles.add(roleIds.get("@mod"));
+                            rolestring = "@mod";
                         else
-                            roles.add(roleIds.get("+voice"));
+                            rolestring = "+voice";
 
                         // separately determine if the user is also a VIP
                         if (vips.contains(u.getID()))
                             roles.add(roleIds.get("vip"));
+
+                        if (u.getPresence() != Presences.ONLINE)
+                            rolestring += "-afk";
+
+                        roles.add(roleIds.get(rolestring));
                         u.setRoles(roles);
                         users.add(u);
+                        // DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
                     }
+
                 }
             });
 
@@ -454,6 +522,42 @@ public class TestBot {
                     try {
                         String name = event.getUser().getName();
                         DiscordClient.get().sendMessage(name+" joined the channel.", "102483264945545216");
+                    } catch (Exception e) {
+                        // e.printStackTrace();
+                    }
+                }
+            });
+
+            DiscordClient.get().getDispatcher().registerListener(new IListener<VoiceStatusUpdateEvent>() {
+                @Override public void receive(VoiceStatusUpdateEvent event) {
+                    try {
+                        User u = event.getUser();
+                        ArrayList<String> roles = u.getRoles();
+
+                        if (event.getIsSuppressed()) {
+                            if (roles.contains(roleIds.get("@admin")))
+                                roles.add(roleIds.get("@admin-afk"));
+                            if (roles.contains(roleIds.get("vip")))
+                                roles.add(roleIds.get("vip-afk"));
+                            if (roles.contains(roleIds.get("@mod")))
+                                roles.add(roleIds.get("@mod-afk"));
+                            if (roles.contains(roleIds.get("@channelmod")))
+                                roles.add(roleIds.get("@channelmod-afk"));
+                            if (roles.contains(roleIds.get("+voice")))
+                                roles.add(roleIds.get("+voice-afk"));
+                        } else {
+                            if (roles.contains(roleIds.get("@admin-afk")))
+                                roles.remove(roleIds.get("@admin-afk"));
+                            if (roles.contains(roleIds.get("vip-afk")))
+                                roles.remove(roleIds.get("vip-afk"));
+                            if (roles.contains(roleIds.get("@mod-afk")))
+                                roles.remove(roleIds.get("@mod-afk"));
+                            if (roles.contains(roleIds.get("@channelmod-afk")))
+                                roles.remove(roleIds.get("@channelmod-afk"));
+                            if (roles.contains(roleIds.get("+voice-afk")))
+                                roles.remove(roleIds.get("+voice-afk"));
+                        }
+                        DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), event.getUser(), roles);
                     } catch (Exception e) {
                         // e.printStackTrace();
                     }

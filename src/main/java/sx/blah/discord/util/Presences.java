@@ -27,5 +27,6 @@ package sx.blah.discord.util;
 public enum Presences {
     ONLINE,
     IDLE,
-    OFFLINE;
+    OFFLINE,
+    AFK;
 }

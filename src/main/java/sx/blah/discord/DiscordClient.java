@@ -821,6 +821,21 @@ public final class DiscordClient {
                         }
                         break;
 
+                    case "VOICE_STATE_UPDATE":
+                        String userId = (String) d.get("user_id");
+                        guild = getGuildByID((String) d.get("guild_id"));
+                        user = guild.getUserByID(userId);
+                        Presences p = user.getPresence();
+
+                        if((boolean) d.get("suppress")) {
+                            user.setPresence(Presences.AFK);
+                        } else {
+                            user.setPresence(Presences.ONLINE);
+                        }
+
+                        dispatcher.dispatch(new VoiceStatusUpdateEvent(user, (boolean) d.get("suppress")));
+                        break;
+
                     default:
                         Discord4J.logger.warn("Unknown message received: {} (ignoring): {}", s, frame);
                 }
