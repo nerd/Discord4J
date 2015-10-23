@@ -223,7 +223,7 @@ public class TestBot {
                                 }
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
 					} else if(m.getContent().startsWith("!unban ") && owners.contains(m.getAuthor().getID())) {
                         try {
@@ -273,11 +273,11 @@ public class TestBot {
                         } catch (Exception e) {
 
                         }
-                    } else if(m.getContent().startsWith("!afk") || m.getContent().startsWith("!return")) {
+                    } else if(m.getContent().equals("!afk") || m.getContent().equals("!return")) {
                         // go to afk room or return to lobby with return. just toggles the states, but both make sense
                         try {
                             if (m.getAuthor().getPresence() == Presences.ONLINE) {
-                                m.getAuthor().setPresence(Presences.OFFLINE);
+                                m.getAuthor().setPresence(Presences.AFK);
                                 DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** went afk", m.getChannel().getID());
                                 // delete the command after we get it to remove chat clutter
                                 // {"roles":["105507446012805120","105545325791416320"]}
@@ -431,7 +431,7 @@ public class TestBot {
                                     } else if (addRemoveRole.startsWith("-")) {
                                         try {
                                             roles.remove(roleIds.get(roleName));
-                                            roles.remove(roleIds.get(roleName+"-afk"));
+                                            roles.remove(roleIds.get(roleName + "-afk"));
                                             u.setRoles(roles);
                                             beornot = "to no longer have";
                                         } catch (Exception e) {
@@ -439,14 +439,28 @@ public class TestBot {
                                         }
                                     }
                                     DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
-                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** set **" + u.getName() + "** "+beornot+" "+roleName+" rights.", m.getChannel().getID());
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** set **" + u.getName() + "** " + beornot + " " + roleName + " rights.", m.getChannel().getID());
                                 }
                             }
-
 
                         } catch (Exception e) {
                             // e.printStackTrace();
                         }
+                    } else if ((m.getContent().startsWith("!afk ")) && owners.contains(m.getAuthor().getID())) {
+                        // code similar to this could be used on any
+                        String name = m.getContent().split(" ", 2)[1];
+                        for (User u : DiscordClient.get().getGuilds().get(0).getUsers())
+                            if (u.getName().startsWith(name))
+                                u.setPresence(Presences.AFK);
+
+                        for(User u : fixUsersRoles())
+                            try {
+                                // do not change roles for ourselves! we should remain a bot.
+                                if(!u.getID().equals(DiscordClient.get().getOurUser().getID()))
+                                    DiscordClient.get().changeRole(m.getChannel().getParent(), u, u.getRoles());
+                            } catch (Exception e) {
+                                // e.printStackTrace();
+                            }
                     }
 
                     try {
@@ -458,7 +472,8 @@ public class TestBot {
                     }
 				}
 
-                private void fixUsersRoles() {
+                private ArrayList<User> fixUsersRoles() {
+                    ArrayList<User> users = new ArrayList<>();
                     for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
                         ArrayList<String> roles = new ArrayList<>();
 
@@ -478,15 +493,15 @@ public class TestBot {
                         if (vips.contains(u.getID()))
                             roles.add(roleIds.get("vip"));
 
-                        if (u.getPresence() != Presences.ONLINE)
-                            rolestring += "-afk";
-
                         roles.add(roleIds.get(rolestring));
+
+                        if (u.getPresence() == Presences.IDLE || u.getPresence() == Presences.AFK || u.getPresence() == Presences.MUTED)
+                            roles.add(roleIds.get(rolestring+"-afk"));
+
                         u.setRoles(roles);
                         users.add(u);
-                        // DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
                     }
-
+                    return users;
                 }
             });
 
@@ -535,6 +550,8 @@ public class TestBot {
                         ArrayList<String> roles = u.getRoles();
 
                         if (event.getIsSuppressed()) {
+                            // update the presence to muted
+                            u.setPresence(Presences.MUTED);
                             if (roles.contains(roleIds.get("@admin")))
                                 roles.add(roleIds.get("@admin-afk"));
                             if (roles.contains(roleIds.get("vip")))
@@ -545,7 +562,9 @@ public class TestBot {
                                 roles.add(roleIds.get("@channelmod-afk"));
                             if (roles.contains(roleIds.get("+voice")))
                                 roles.add(roleIds.get("+voice-afk"));
+                            // u.setRoles(roles);
                         } else {
+                            u.setPresence(Presences.ONLINE);
                             if (roles.contains(roleIds.get("@admin-afk")))
                                 roles.remove(roleIds.get("@admin-afk"));
                             if (roles.contains(roleIds.get("vip-afk")))
@@ -557,6 +576,7 @@ public class TestBot {
                             if (roles.contains(roleIds.get("+voice-afk")))
                                 roles.remove(roleIds.get("+voice-afk"));
                         }
+                        u.setRoles(roles);
                         DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), event.getUser(), roles);
                     } catch (Exception e) {
                         // e.printStackTrace();

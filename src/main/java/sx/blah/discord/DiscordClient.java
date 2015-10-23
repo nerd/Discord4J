@@ -558,7 +558,22 @@ public final class DiscordClient {
 
                             for (Object o1 : members) {
                                 JSONObject member = (JSONObject) ((JSONObject) o1).get("user");
-                                g.addUser(new User((String) member.get("username"), (String) member.get("id"), (String) member.get("avatar")));
+                                //System.out.println(o1.toString());
+                                // while we are joining, save the roles to the user list
+                                User u = new User((String) member.get("username"), (String) member.get("id"), (String) member.get("avatar"));
+                                JSONArray roles = (JSONArray) ((JSONObject) o1).get("roles");
+                                // create arraylist of role IDs
+                                ArrayList<String> roleIds = new ArrayList<>();
+                                for (Object role : roles)
+                                    roleIds.add(role.toString());
+                                u.setRoles(roleIds);
+
+                                for(String role : u.getRoles())
+                                    System.out.print("\"" + role + "\", ");
+
+                                System.out.println();
+
+                                g.addUser(u);
                             }
 
                             for (Object o1 : presences) {
