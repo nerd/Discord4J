@@ -262,7 +262,7 @@ public final class DiscordClient {
                         new BasicNameValuePair("authorization", DiscordClient.get().getToken()),
                         new BasicNameValuePair("content-type", "application/json"));
 
-                System.out.println(response);
+//                System.out.println(response);
 //                JSONObject object1 = (JSONObject) JSON_PARSER.parse(response);
 //                String time = (String) object1.get("d").get("user");
 //                String messageID = (String) object1.get("id");
@@ -275,6 +275,22 @@ public final class DiscordClient {
                 Discord4J.logger.error("Received 403 error attempting to delete message; is your login correct?");
             } catch (UnsupportedEncodingException e) {
                 Discord4J.logger.error("Encoding on roles was not correct.");
+            }
+        }
+    }
+
+    public void moveUserToChannel(Guild guild, User user, String channel) {
+        if(this.isReady()) {
+            try {
+                String response = Requests.PATCH.makeRequest(DiscordEndpoints.SERVERS + guild.getID() + "/members/" + user.getID(),
+                        // {"channel_id":"102917634458161153"}
+                        new StringEntity("{\"channel_id\":\"" + channel + "\"}"),
+                        new BasicNameValuePair("authorization", DiscordClient.get().getToken()),
+                        new BasicNameValuePair("content-type", "application/json"),
+                        new BasicNameValuePair("referer", DiscordEndpoints.BASE + "channels/" + guild.getID() + "/" + guild.getID()));
+                System.out.println(response);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
     }
