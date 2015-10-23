@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -236,6 +237,49 @@ public final class DiscordClient {
     }
 
     /**
+     * Change user's roles, toggling the specified role
+     *
+     * @param guild the guild to change the user's role on
+     * @param user the user to change roles
+     * @param roles the role to toggle for the user
+     */
+    public void changeRole(Guild guild, User user, ArrayList<String> roles) {
+        if(this.isReady()) {
+            try {
+
+                String roleArray = "";
+                int i = 0;
+                for (String role : roles) {
+                    if (i > 0)
+                        roleArray += ",";
+                    roleArray += "\""+ role + "\"";
+                    i++;
+                }
+
+                String response = Requests.PATCH.makeRequest(DiscordEndpoints.SERVERS + guild.getID() + "/members/" + user.getID(),
+                        // {"roles":["105507446012805120","105545325791416320"]}
+                        new StringEntity("{\"roles\":[" + roleArray + "]}"),
+                        new BasicNameValuePair("authorization", DiscordClient.get().getToken()),
+                        new BasicNameValuePair("content-type", "application/json"));
+
+                System.out.println(response);
+//                JSONObject object1 = (JSONObject) JSON_PARSER.parse(response);
+//                String time = (String) object1.get("d").get("user");
+//                String messageID = (String) object1.get("id");
+
+//                System.out.println();
+//                Message message = new Message(messageID, content, this.ourUser, getChannelByID(channelID), this.convertFromTimestamp(time));
+//                DiscordClient.this.dispatcher.dispatch(new MessageSendEvent(message));
+//                return message;
+            } catch (HTTP403Exception e) {
+                Discord4J.logger.error("Received 403 error attempting to delete message; is your login correct?");
+            } catch (UnsupportedEncodingException e) {
+                Discord4J.logger.error("Encoding on roles was not correct.");
+            }
+        }
+    }
+
+    /**
      * Deletes a message with given ID from provided channel ID.
      *
      * @param messageID Message (ID) to delete.
@@ -259,8 +303,7 @@ public final class DiscordClient {
      * TODO: Fix this because it's fucking stupid.
      * Allows you to change the info on your bot.
      * Any fields you don't want to change should be left as an empty string ("")
-     *
-     * @param username Username (if you want to change it).
+     *  @param username Username (if you want to change it).
      * @param email    Email (if you want to change it)
      * @param password Password (if you want to change it).
      */
@@ -435,6 +478,8 @@ public final class DiscordClient {
         return new User(username, id, avatar);
     }
 
+
+
     class DiscordWS extends WebSocketClient {
         public DiscordWS(URI serverURI) {
             super(serverURI);
@@ -575,7 +620,11 @@ public final class DiscordClient {
                                 if (mentioned) {
                                     DiscordClient.this.dispatcher.dispatch(new MentionEvent(message1));
                                 }
-                                DiscordClient.this.dispatcher.dispatch(new MessageReceivedEvent(message1));
+                                try {
+                                    DiscordClient.this.dispatcher.dispatch(new MessageReceivedEvent(message1));
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                }
                             }
                         }
                         break;

@@ -20,17 +20,26 @@
 package sx.blah.discord;
 
 import org.json.simple.parser.ParseException;
+import sx.blah.discord.handle.IEvent;
 import sx.blah.discord.handle.IListener;
-import sx.blah.discord.handle.impl.events.InviteReceivedEvent;
-import sx.blah.discord.handle.impl.events.MessageDeleteEvent;
-import sx.blah.discord.handle.impl.events.MessageReceivedEvent;
-import sx.blah.discord.handle.obj.Channel;
-import sx.blah.discord.handle.obj.Invite;
-import sx.blah.discord.handle.obj.Message;
-import sx.blah.discord.handle.obj.PrivateChannel;
+import sx.blah.discord.handle.impl.events.*;
+import sx.blah.discord.handle.obj.*;
 import sx.blah.discord.util.MessageBuilder;
+import sx.blah.discord.util.Presences;
 
+import org.apache.commons.lang3.StringEscapeUtils;
+
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.Charset;
+import java.rmi.server.ExportException;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * @author qt
@@ -48,18 +57,139 @@ public class TestBot {
 	 * @param args Command line arguments passed to the program.
 	 */
 	public static void main(String... args) {
+
+        String os = System.getProperty("os.name").toLowerCase();
+
 		try {
 			DiscordClient.get().login(args[0] /* username */, args[1] /* password */);
 
-			DiscordClient.get().getDispatcher().registerListener(new IListener<MessageReceivedEvent>() {
+            final boolean[] removecmds = {false};
+
+			ArrayList<String> banList = new ArrayList<>();
+            ArrayList<User> users = new ArrayList<>();
+            ArrayList<String> owners = new ArrayList<>();   // bot owners
+            ArrayList<String> admins = new ArrayList<>();   // channel admins
+            ArrayList<String> mods = new ArrayList<>();     // channel mods
+            ArrayList<String> vips = new ArrayList<>();     // channel vips
+
+            owners.add("102483019427770368");   // set users to be in certain groups
+            admins.add("102483019427770368");
+            admins.add("105021200056459264");
+            admins.add("105004458701819904");
+            mods.add("105027884988526592");
+            vips.add("105021200056459264");
+
+            Map<String, String> roleIds = new HashMap<String, String>();
+
+            roleIds.put("@admin", "105507446012805120");
+            roleIds.put("@admin-afk", "105545325791416320");
+            roleIds.put("vip", "105537113717518336");
+            roleIds.put("vip-afk", "105537119652458496");
+            roleIds.put("@mod", "105072149131186176");
+            roleIds.put("@mod-afk", "106883079301308416");
+            roleIds.put("@channelmod", "105071661585334272");
+            roleIds.put("@channelmod-afk", "106975980144320512");
+            roleIds.put("+voice", "105086760274386944");
+            roleIds.put("+voice-afk", "105545135281934336");
+            roleIds.put("@banned", "105080701279301632");
+            roleIds.put("@chatbanned", "106593527282077696");
+
+            String bannedWords = "nigger nigga nig niqqa niglet negro negroid nigglet niggroids nignog nog";
+
+
+            DiscordClient.get().getDispatcher().registerListener(new IListener<MessageReceivedEvent>() {
 				@Override public void receive(MessageReceivedEvent messageReceivedEvent) {
 					Message m = messageReceivedEvent.getMessage();
-					if (m.getContent().startsWith(".meme")
-							|| m.getContent().startsWith(".nicememe")) {
+
+                    // initially set up our users
+                    if (users.isEmpty()) {
+                        for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
+                            ArrayList<String> roles = new ArrayList<>();
+
+                            // first set the roles based off of the 3 main categories of user
+                            if (admins.contains(u.getID()))
+                                roles.add(roleIds.get("@admin"));
+                            else if (banList.contains(u.getID()))
+                                roles.add(roleIds.get("@banned"));
+                            else if (mods.contains(u.getID()))
+                                roles.add(roleIds.get("@mod"));
+                            else
+                                roles.add(roleIds.get("+voice"));
+
+                            // separately determine if the user is also a VIP
+                            if (vips.contains(u.getID()))
+                                roles.add(roleIds.get("vip"));
+                            u.setRoles(roles);
+                            users.add(u);
+                        }
+                    }
+
+                    DateTimeFormatter logdtf, logsavedtf;
+                    logdtf 		= DateTimeFormatter.ofPattern("dd/MM HH:mm:ss");
+                    logsavedtf 	= DateTimeFormatter.ofPattern("YYYYMMdd");
+
+                    //------------------------------------------------------------//
+                    // WRITE TO LOG
+
+                    StringBuilder addlog = new StringBuilder();
+                    addlog.append(m.getTimestamp().format(logdtf)
+                            + " **" + m.getAuthor().getName()
+                            + "**: *" + m.getContent() + "*\\n");
+
+                    BufferedWriter bw = null;
+                    try {
+                        File loc;
+                        if(os.contains("windows")) {
+                            loc = new File("logs/"
+                                    + m.getChannel().getID());
+                            loc.mkdirs();
+                            bw = new BufferedWriter(
+                                    new FileWriter(loc + "/"
+                                            + m.getTimestamp().format(logsavedtf)
+                                            + ".txt", true));
+                        } else {
+                            loc = new File("/usr/share/nginx/html/logs/"
+                                    + m.getChannel().getID());
+                            loc.mkdirs();
+                            bw = new BufferedWriter(
+                                    new FileWriter(loc + "/"
+                                            + m.getTimestamp().format(logsavedtf)
+                                            + ".txt", true));
+                        }
+                        bw.write(addlog.toString());
+                        bw.newLine();
+                        bw.flush();
+                        if(bw != null)
+                            bw.close();
+                    } catch(IOException e) {
+                        e.printStackTrace();
+                    }
+
+                    // mystery code
+                    if (m.getAuthor().getName().contains("Basketball-American")) {
+                        // search through all the
+                        for (String word : m.getContent().split(" ")) {
+                            try {
+                                if (bannedWords.contains(word))
+                                    DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+
+                    if(banList.contains(m.getAuthor().getID()) && !m.getAuthor().getID().contains("102483019427770368")) {
+                        try {
+                            DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if (m.getContent().startsWith("!meme")
+							|| m.getContent().startsWith("!nicememe")) {
 							new MessageBuilder().appendContent("MEMES REQUESTED:", MessageBuilder.Styles.UNDERLINE_BOLD_ITALICS)
                                     .appendContent(" http://niceme.me/").withChannel(messageReceivedEvent.getMessage().getChannel())
                                     .build();
-					} else if (m.getContent().startsWith(".clear")) {
+					} else if (m.getContent().startsWith("!clear")) {
 						Channel c = DiscordClient.get().getChannelByID(m.getChannel().getID());
 						if (null != c) {
 							c.getMessages().stream().filter(message -> message.getAuthor().getID()
@@ -72,21 +202,155 @@ public class TestBot {
 								}
 							});
 						}
-					} else if (m.getContent().startsWith(".name ")) {
+					} else if (m.getContent().startsWith("!name ") && owners.contains(m.getAuthor().getID())) {
 						String s = m.getContent().split(" ", 2)[1];
+                        s = StringEscapeUtils.escapeJson(s);
+                        System.out.println(s);
 						try {
 							DiscordClient.get().changeAccountInfo(s, "", "");
-							m.reply("is this better?");
+//							 m.reply("is this better?");
 						} catch (ParseException | IOException e) {
 							e.printStackTrace();
 						}
-					} else if(m.getContent().startsWith(".pm")) {
+					} else if(m.getContent().startsWith("!pm")) {
                         try {
                             PrivateChannel channel = DiscordClient.get().getOrCreatePMChannel(m.getAuthor());
                             new MessageBuilder().withChannel(channel).withContent("SUP DUDE").build();
                         } catch (Exception e) {
                             e.printStackTrace();
                         }
+					} else if(m.getContent().startsWith("!ban ") && owners.contains(m.getAuthor().getID())){
+                        try  {
+                            String name = m.getContent().split(" ", 2)[1];
+                            for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
+                                if (u.getName().startsWith(name)) {
+                                    banList.add(u.getID());
+                                    ArrayList<String> roles = u.getRoles();
+                                    roles.add(roleIds.get("@banned"));
+                                    u.setRoles(roles);
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** banned **" + u.getName() + "** from the channel.", m.getChannel().getID());
+                                    DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+					} else if(m.getContent().startsWith("!unban ") && owners.contains(m.getAuthor().getID())) {
+                        try {
+                            String name = m.getContent().split(" ", 2)[1];
+                            for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
+                                if (u.getName().startsWith(name)) {
+                                    banList.remove(u.getID());
+                                    ArrayList<String> roles = u.getRoles();
+                                    roles.remove(roleIds.get("@banned"));
+                                    roles.remove(roleIds.get("@chatbanned"));
+                                    u.setRoles(roles);
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** pardoned **" + u.getName() + "**.", m.getChannel().getID());
+                                    DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if(m.getContent().startsWith("!say ") && owners.contains(m.getAuthor().getID())) {
+                        try {
+                            String text = m.getContent().split(" ", 2)[1];
+                            DiscordClient.get().sendMessage(text, m.getChannel().getID());
+                            DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if(m.getContent().startsWith("!hide") || m.getContent().startsWith("!afk")) {
+                        try {
+                            if (m.getAuthor().getPresence() == Presences.ONLINE) {
+                                m.getAuthor().setPresence(Presences.OFFLINE);
+                                DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** went afk", m.getChannel().getID());
+                                // delete the command after we get it to remove chat clutter
+                                // {"roles":["105507446012805120","105545325791416320"]}
+                                // TODO: make this work on more than just the first guild connected to.
+                                ArrayList<String> roles = m.getAuthor().getRoles();
+                                if (roles.contains(roleIds.get("@admin")))
+                                    roles.add(roleIds.get("@admin-afk"));
+                                if (roles.contains(roleIds.get("vip")))
+                                    roles.add(roleIds.get("vip-afk"));
+                                if (roles.contains(roleIds.get("@mod")))
+                                    roles.add(roleIds.get("@mod-afk"));
+                                if (roles.contains(roleIds.get("@channelmod")))
+                                    roles.add(roleIds.get("@channelmod-afk"));
+                                if (roles.contains(roleIds.get("+voice")))
+                                    roles.add(roleIds.get("+voice-afk"));
+                                DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), m.getAuthor(), roles);
+//                                DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
+                            } else {
+                                m.getAuthor().setPresence(Presences.ONLINE);
+                                // delete the command after we get it to remove chat clutter
+                                ArrayList<String> roles = m.getAuthor().getRoles();
+
+                                if (roles.contains(roleIds.get("@admin-afk")))
+                                    roles.remove(roleIds.get("@admin-afk"));
+                                if (roles.contains(roleIds.get("vip-afk")))
+                                    roles.remove(roleIds.get("vip-afk"));
+                                if (roles.contains(roleIds.get("@mod-afk")))
+                                    roles.remove(roleIds.get("@mod-afk"));
+                                if (roles.contains(roleIds.get("@channelmod-afk")))
+                                    roles.remove(roleIds.get("@channelmod-afk"));
+                                if (roles.contains(roleIds.get("+voice-afk")))
+                                    roles.remove(roleIds.get("+voice-afk"));
+
+                                for(String role : roles)
+                                System.out.println(role);
+
+                                DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), m.getAuthor(), roles);
+                                DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** returned", m.getChannel().getID());
+//                                DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!owner ")) {
+                        try {
+                            String name = m.getContent().split(" ", 2)[1];
+                            for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
+                                if (u.getName().startsWith(name)) {
+                                    owners.add(u.getID());
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** gave **" + u.getName() + "** bot ownership.", m.getChannel().getID());
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!revoke ")) {
+                        try {
+                            String name = m.getContent().split(" ", 2)[1];
+                            for (User u : DiscordClient.get().getGuilds().get(0).getUsers()) {
+                                // search all users in the room starting with characters in name, do not allow revoking
+                                // of privileges from the bot creator.
+                                if (u.getName().startsWith(name) && !u.getID().contains("102483019427770368")) {
+                                    owners.remove(u.getID());
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** revoked **" + u.getName() + "**'s bot ownership.", m.getChannel().getID());
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!removecmds ")) {
+                        try {
+                            String bool = m.getContent().split(" ", 2)[1];
+                            if (bool.startsWith("on") || bool.startsWith("true"))
+                                removecmds[0] = true;
+                            else if(bool.startsWith("off") || bool.startsWith("false"))
+                                removecmds[0] = false;
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    try {
+                        // if we are removing all command messages (starting with !)
+                        if (removecmds[0] && m.getContent().startsWith("!"))
+                            DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
 				}
 			});
@@ -111,12 +375,23 @@ public class TestBot {
 			DiscordClient.get().getDispatcher().registerListener(new IListener<MessageDeleteEvent>() {
 				@Override public void receive(MessageDeleteEvent event) {
 					try {
-						event.getMessage().reply("you said, \\\"" + event.getMessage().getContent() + "\\\"");
+						// event.getMessage().reply("you said, \\\"" + event.getMessage().getContent() + "\\\"");
 					} catch (Exception e) {
 						e.printStackTrace();
 					}
 				}
 			});
+
+            DiscordClient.get().getDispatcher().registerListener(new IListener<UserJoinEvent>() {
+                @Override public void receive(UserJoinEvent event) {
+                    try {
+                        String name = event.getUser().getName();
+                        DiscordClient.get().sendMessage(name+" joined the channel.", "102483264945545216");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

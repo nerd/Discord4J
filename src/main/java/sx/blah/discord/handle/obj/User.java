@@ -22,6 +22,8 @@ package sx.blah.discord.handle.obj;
 import sx.blah.discord.DiscordEndpoints;
 import sx.blah.discord.util.Presences;
 
+import java.util.ArrayList;
+
 /**
  * @author qt
  * @since 5:40 PM 15 Aug, 2015
@@ -64,11 +66,17 @@ public class User {
 	 */
 	private String avatarURL;
 
+    /**
+     * The user's current roles.
+     */
+    private ArrayList<String> roles;
+
     public User(String name, String id, String avatar) {
 	    this.id = id;
 	    this.name = name;
 	    this.avatar = avatar;
 	    this.avatarURL = String.format(DiscordEndpoints.AVATARS, this.id, this.avatar);
+        this.roles = new ArrayList<>();
     }
 
     // -- Getters and setters. Pretty boring.
@@ -104,6 +112,14 @@ public class User {
 
     public void setPresence(Presences presence) {
         this.presence = presence;
+    }
+
+    public void setRoles(ArrayList<String> roles) {
+        this.roles = roles;
+    }
+
+    public ArrayList<String> getRoles() {
+        return roles;
     }
 
     // STOLEN: idea from hydrabolt :P
