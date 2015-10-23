@@ -279,18 +279,24 @@ public final class DiscordClient {
         }
     }
 
+    /**
+     * In the server, take the user and put them into channel with id @param channel
+     * @param guild Guild/server to change the user's voice channel in.
+     * @param user User to change voice channel.
+     * @param channel String with the channel ID for the voice channel.
+     */
     public void moveUserToChannel(Guild guild, User user, String channel) {
         if(this.isReady()) {
             try {
                 String response = Requests.PATCH.makeRequest(DiscordEndpoints.SERVERS + guild.getID() + "/members/" + user.getID(),
-                        // {"channel_id":"102917634458161153"}
+                        // packet request: ```{"channel_id":"102917634458161153"}```
                         new StringEntity("{\"channel_id\":\"" + channel + "\"}"),
                         new BasicNameValuePair("authorization", DiscordClient.get().getToken()),
                         new BasicNameValuePair("content-type", "application/json"),
                         new BasicNameValuePair("referer", DiscordEndpoints.BASE + "channels/" + guild.getID() + "/" + guild.getID()));
-                System.out.println(response);
+                // System.out.println(response); the response is some sort of ID, i'm not sure for what? maybe it's a key?
             } catch (Exception e) {
-                e.printStackTrace();
+                // e.printStackTrace();
             }
         }
     }
@@ -474,10 +480,8 @@ public final class DiscordClient {
             PrivateChannel channel = new PrivateChannel(user, (String) object.get("id"));
             privateChannels.add(channel);
             return channel;
-        } catch (HTTP403Exception e) {
-            e.printStackTrace();
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            // e.printStackTrace();
         }
 
         return null;
@@ -639,7 +643,8 @@ public final class DiscordClient {
                                 try {
                                     DiscordClient.this.dispatcher.dispatch(new MessageReceivedEvent(message1));
                                 } catch (Exception e) {
-                                    e.printStackTrace();
+                                    // TODO: this may be helpful with debugging, but is too verbose sometimes
+                                    // e.printStackTrace();
                                 }
                             }
                         }
@@ -684,7 +689,7 @@ public final class DiscordClient {
                                 try {
                                     getChannelMessages(channel);
                                 } catch (Exception e) {
-                                    e.printStackTrace();
+                                    // e.printStackTrace();
                                 }
                             }
                         }
@@ -786,7 +791,7 @@ public final class DiscordClient {
                             try {
                                 getChannelMessages(privateChannel);
                             } catch (Exception e) {
-                                e.printStackTrace();
+                                // e.printStackTrace();
                             }
                         } else { // Regular channel.
                             String type = (String) d.get("type");
@@ -800,7 +805,7 @@ public final class DiscordClient {
                                     try {
                                         getChannelMessages(channel);
                                     } catch (Exception e) {
-                                        e.printStackTrace();
+                                        // e.printStackTrace();
                                     }
                                     dispatcher.dispatch(new ChannelCreateEvent(channel));
                                 }

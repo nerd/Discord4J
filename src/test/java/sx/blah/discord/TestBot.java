@@ -190,7 +190,7 @@ public class TestBot {
 					} else if (m.getContent().startsWith("!name ") && owners.contains(m.getAuthor().getID())) {
 						String s = m.getContent().split(" ", 2)[1];
                         s = StringEscapeUtils.escapeJson(s);
-                        System.out.println(s);
+                        // System.out.println(s);
 						try {
 							DiscordClient.get().changeAccountInfo(s, "", "");
 //							 m.reply("is this better?");
@@ -214,7 +214,11 @@ public class TestBot {
                                     roles.add(roleIds.get("@banned"));
                                     u.setRoles(roles);
                                     DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** banned **" + u.getName() + "** from the channel.", m.getChannel().getID());
-                                    DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
+                                    try {
+                                        DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, roles);
+                                    } catch (Exception e) {
+
+                                    }
                                 }
                             }
                         } catch (Exception e) {
@@ -235,15 +239,20 @@ public class TestBot {
                                 }
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     } else if(m.getContent().startsWith("!say ") && owners.contains(m.getAuthor().getID())) {
                         try {
                             String text = m.getContent().split(" ", 2)[1];
                             DiscordClient.get().sendMessage(text, m.getChannel().getID());
+                        } catch (Exception e) {
+                            // e.printStackTrace();
+                        }
+
+                        try {
                             DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     } else if(m.getContent().startsWith("!hide") || m.getContent().startsWith("!afk")) {
                         try {
@@ -270,7 +279,11 @@ public class TestBot {
                                 } catch (Exception e) {
                                     // e.printStackTrace();
                                 }
-                                DiscordClient.get().moveUserToChannel(DiscordClient.get().getGuilds().get(0), m.getAuthor(), afk_channel);
+                                try {
+                                    DiscordClient.get().moveUserToChannel(DiscordClient.get().getGuilds().get(0), m.getAuthor(), afk_channel);
+                                } catch (Exception e) {
+                                    // do nothing
+                                }
 //                                DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
                             } else {
                                 m.getAuthor().setPresence(Presences.ONLINE);
@@ -288,8 +301,8 @@ public class TestBot {
                                 if (roles.contains(roleIds.get("+voice-afk")))
                                     roles.remove(roleIds.get("+voice-afk"));
 
-                                for(String role : roles)
-                                System.out.println(role);
+                                //for(String role : roles)
+                                // System.out.println(role);
 
                                 try {
                                     DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), m.getAuthor(), roles);
@@ -297,13 +310,21 @@ public class TestBot {
                                     // e.printStackTrace();
                                 }
                                 // move players that aren't afk anymore to the lounge channel
-                                DiscordClient.get().moveUserToChannel(DiscordClient.get().getGuilds().get(0), m.getAuthor(), lounge_channel);
-                                DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** returned", m.getChannel().getID());
+                                try {
+                                    DiscordClient.get().moveUserToChannel(DiscordClient.get().getGuilds().get(0), m.getAuthor(), lounge_channel);
+                                } catch (Exception e) {
+                                    // e.printStackTrace();
+                                }
+                                try {
+                                    DiscordClient.get().sendMessage("**" + m.getAuthor().getName() + "** returned", m.getChannel().getID());
+                                } catch (Exception e) {
+                                    // e.printStackTrace();
+                                }
 
 //                                DiscordClient.get().deleteMessage(m.getID(), m.getChannel().getID());
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            //e.printStackTrace();
                         }
                     } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!owner ")) {
                         try {
@@ -315,7 +336,7 @@ public class TestBot {
                                 }
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!revoke ")) {
                         try {
@@ -329,7 +350,7 @@ public class TestBot {
                                 }
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!removecmds ")) {
                         try {
@@ -339,7 +360,7 @@ public class TestBot {
                             else if(bool.startsWith("off") || bool.startsWith("false"))
                                 removecmds[0] = false;
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!fixranks")) {
                         try {
@@ -348,7 +369,7 @@ public class TestBot {
                                 DiscordClient.get().changeRole(DiscordClient.get().getGuilds().get(0), u, u.getRoles());
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     } else if(owners.contains(m.getAuthor().getID()) && m.getContent().startsWith("!voice ")) {
                         try {
@@ -365,7 +386,7 @@ public class TestBot {
                                 }
                             }
                         } catch (Exception e) {
-                            e.printStackTrace();
+                            // e.printStackTrace();
                         }
                     }
 
@@ -412,7 +433,7 @@ public class TestBot {
                                         response.getChannelName(), response.getGuildName(), event.getMessage().getAuthor()),
 								response.getChannelID());
 					} catch (Exception e) {
-						e.printStackTrace();
+						// e.printStackTrace();
 					}
 
 				}
@@ -423,7 +444,7 @@ public class TestBot {
 					try {
 						// event.getMessage().reply("you said, \\\"" + event.getMessage().getContent() + "\\\"");
 					} catch (Exception e) {
-						e.printStackTrace();
+						// e.printStackTrace();
 					}
 				}
 			});
@@ -434,12 +455,12 @@ public class TestBot {
                         String name = event.getUser().getName();
                         DiscordClient.get().sendMessage(name+" joined the channel.", "102483264945545216");
                     } catch (Exception e) {
-                        e.printStackTrace();
+                        // e.printStackTrace();
                     }
                 }
             });
 		} catch (Exception e) {
-			e.printStackTrace();
+			// e.printStackTrace();
 		}
 	}
 }
