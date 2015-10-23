@@ -28,5 +28,6 @@ public enum Presences {
     ONLINE,
     IDLE,
     OFFLINE,
-    AFK;
+    AFK,
+    MUTED;
 }
