@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.ByteBuffer;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -239,6 +240,71 @@ public final class DiscordClient {
     }
 
     /**
+     * Change user's roles, toggling the specified role
+     *
+     * @param guild the guild to change the user's role on
+     * @param user the user to change roles
+     * @param roles the role to toggle for the user
+     */
+    public void changeRole(Guild guild, User user, ArrayList<String> roles) {
+        if(this.isReady()) {
+            try {
+
+                String roleArray = "";
+                int i = 0;
+                for (String role : roles) {
+                    if (i > 0)
+                        roleArray += ",";
+                    roleArray += "\""+ role + "\"";
+                    i++;
+                }
+
+                String response = Requests.PATCH.makeRequest(DiscordEndpoints.SERVERS + guild.getID() + "/members/" + user.getID(),
+                        // {"roles":["105507446012805120","105545325791416320"]}
+                        new StringEntity("{\"roles\":[" + roleArray + "]}"),
+                        new BasicNameValuePair("authorization", DiscordClient.get().getToken()),
+                        new BasicNameValuePair("content-type", "application/json"));
+
+//                System.out.println(response);
+//                JSONObject object1 = (JSONObject) JSON_PARSER.parse(response);
+//                String time = (String) object1.get("d").get("user");
+//                String messageID = (String) object1.get("id");
+
+//                System.out.println();
+//                Message message = new Message(messageID, content, this.ourUser, getChannelByID(channelID), this.convertFromTimestamp(time));
+//                DiscordClient.this.dispatcher.dispatch(new MessageSendEvent(message));
+//                return message;
+            } catch (HTTP403Exception e) {
+                Discord4J.logger.error("Received 403 error attempting to delete message; is your login correct?");
+            } catch (UnsupportedEncodingException e) {
+                Discord4J.logger.error("Encoding on roles was not correct.");
+            }
+        }
+    }
+
+    /**
+     * In the server, take the user and put them into channel with id @param channel
+     * @param guild Guild/server to change the user's voice channel in.
+     * @param user User to change voice channel.
+     * @param channel String with the channel ID for the voice channel.
+     */
+    public void moveUserToChannel(Guild guild, User user, String channel) {
+        if(this.isReady()) {
+            try {
+                String response = Requests.PATCH.makeRequest(DiscordEndpoints.SERVERS + guild.getID() + "/members/" + user.getID(),
+                        // packet request: ```{"channel_id":"102917634458161153"}```
+                        new StringEntity("{\"channel_id\":\"" + channel + "\"}"),
+                        new BasicNameValuePair("authorization", DiscordClient.get().getToken()),
+                        new BasicNameValuePair("content-type", "application/json"),
+                        new BasicNameValuePair("referer", DiscordEndpoints.BASE + "channels/" + guild.getID() + "/" + guild.getID()));
+                // System.out.println(response); the response is some sort of ID, i'm not sure for what? maybe it's a key?
+            } catch (Exception e) {
+                // e.printStackTrace();
+            }
+        }
+    }
+
+    /**
      * Deletes a message with given ID from provided channel ID.
      *
      * @param messageID Message (ID) to delete.
@@ -262,8 +328,7 @@ public final class DiscordClient {
      * TODO: Fix this because it's fucking stupid.
      * Allows you to change the info on your bot.
      * Any fields you don't want to change should be left as an empty string ("")
-     *
-     * @param username Username (if you want to change it).
+     *  @param username Username (if you want to change it).
      * @param email    Email (if you want to change it)
      * @param password Password (if you want to change it).
      */
@@ -418,10 +483,8 @@ public final class DiscordClient {
             PrivateChannel channel = new PrivateChannel(user, (String) object.get("id"));
             privateChannels.add(channel);
             return channel;
-        } catch (HTTP403Exception e) {
-            e.printStackTrace();
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            // e.printStackTrace();
         }
 
         return null;
@@ -437,6 +500,8 @@ public final class DiscordClient {
 
         return new User(username, id, avatar);
     }
+
+
 
     class DiscordWS extends WebSocketClient {
         public DiscordWS(URI serverURI) {
@@ -496,7 +561,22 @@ public final class DiscordClient {
 
                             for (Object o1 : members) {
                                 JSONObject member = (JSONObject) ((JSONObject) o1).get("user");
-                                g.addUser(new User((String) member.get("username"), (String) member.get("id"), (String) member.get("avatar")));
+                                //System.out.println(o1.toString());
+                                // while we are joining, save the roles to the user list
+                                User u = new User((String) member.get("username"), (String) member.get("id"), (String) member.get("avatar"));
+                                JSONArray roles = (JSONArray) ((JSONObject) o1).get("roles");
+                                // create arraylist of role IDs
+                                ArrayList<String> roleIds = new ArrayList<>();
+                                for (Object role : roles)
+                                    roleIds.add(role.toString());
+                                u.setRoles(roleIds);
+
+                                for(String role : u.getRoles())
+                                    System.out.print("\"" + role + "\", ");
+
+                                System.out.println();
+
+                                g.addUser(u);
                             }
 
                             for (Object o1 : presences) {
@@ -596,7 +676,12 @@ public final class DiscordClient {
                                 if (mentioned) {
                                     DiscordClient.this.dispatcher.dispatch(new MentionEvent(message1));
                                 }
-                                DiscordClient.this.dispatcher.dispatch(new MessageReceivedEvent(message1));
+                                try {
+                                    DiscordClient.this.dispatcher.dispatch(new MessageReceivedEvent(message1));
+                                } catch (Exception e) {
+                                    // TODO: this may be helpful with debugging, but is too verbose sometimes
+                                    // e.printStackTrace();
+                                }
                             }
                         }
                         break;
@@ -640,7 +725,7 @@ public final class DiscordClient {
                                 try {
                                     getChannelMessages(channel);
                                 } catch (Exception e) {
-                                    e.printStackTrace();
+                                    // e.printStackTrace();
                                 }
                             }
                         }
@@ -742,7 +827,7 @@ public final class DiscordClient {
                             try {
                                 getChannelMessages(privateChannel);
                             } catch (Exception e) {
-                                e.printStackTrace();
+                                // e.printStackTrace();
                             }
                         } else { // Regular channel.
                             String type = (String) d.get("type");
@@ -756,7 +841,7 @@ public final class DiscordClient {
                                     try {
                                         getChannelMessages(channel);
                                     } catch (Exception e) {
-                                        e.printStackTrace();
+                                        // e.printStackTrace();
                                     }
                                     dispatcher.dispatch(new ChannelCreateEvent(channel));
                                 }
@@ -770,6 +855,21 @@ public final class DiscordClient {
                             channel.getParent().getChannels().remove(channel);
 
                         }
+                        break;
+
+                    case "VOICE_STATE_UPDATE":
+                        String userId = (String) d.get("user_id");
+                        guild = getGuildByID((String) d.get("guild_id"));
+                        user = guild.getUserByID(userId);
+                        Presences p = user.getPresence();
+
+                        if((boolean) d.get("suppress")) {
+                            user.setPresence(Presences.AFK);
+                        } else {
+                            user.setPresence(Presences.ONLINE);
+                        }
+
+                        dispatcher.dispatch(new VoiceStatusUpdateEvent(user, (boolean) d.get("suppress")));
                         break;
 
                     default:

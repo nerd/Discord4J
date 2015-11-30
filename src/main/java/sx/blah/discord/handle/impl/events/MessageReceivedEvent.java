@@ -30,6 +30,7 @@ public class MessageReceivedEvent implements IEvent {
 	private final Message message;
 
 	public MessageReceivedEvent(Message message) {
+		System.out.println(message);
 		this.message = message;
 	}
 
