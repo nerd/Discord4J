@@ -37,6 +37,7 @@ import sx.blah.discord.util.Presences;
 import sx.blah.discord.util.Requests;
 
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -44,6 +45,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author qt
@@ -118,9 +120,19 @@ public final class DiscordClient {
      * All of the private message channels that the bot is connected to.
      */
     private final List<PrivateChannel> privateChannels = new ArrayList<>();
+	
+	/**
+     * A cached json object of the games list to prevent unnecessary slowdown from file i/o
+     */
+    private JSONArray games;
 
     private DiscordClient() {
         this.dispatcher = new EventDispatcher();
+        try {
+            games = (JSONArray) JSON_PARSER.parse(new InputStreamReader(this.getClass().getClassLoader().getResourceAsStream("games.json")));
+        } catch (IOException | ParseException e) {
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -220,13 +232,15 @@ public final class DiscordClient {
                         new BasicNameValuePair("content-type", "application/json"));
 
 
-            JSONObject object1 = (JSONObject) JSON_PARSER.parse(response);
-            String time = (String) object1.get("timestamp");
-            String messageID = (String) object1.get("id");
+                JSONObject object1 = (JSONObject) JSON_PARSER.parse(response);
+                String time = (String) object1.get("timestamp");
+                String messageID = (String) object1.get("id");
 
-            Message message = new Message(messageID, content, this.ourUser, getChannelByID(channelID), this.convertFromTimestamp(time));
-            DiscordClient.this.dispatcher.dispatch(new MessageSendEvent(message));
-                return message;
+                Channel channel = getChannelByID(channelID);
+                Message message = new Message(messageID, content, this.ourUser, channel, this.convertFromTimestamp(time));
+                channel.addMessage(message); //Had to be moved here so that if a message is edited before the MESSAGE_CREATE event, it doesn't error
+                DiscordClient.this.dispatcher.dispatch(new MessageSendEvent(message));
+            return message;
             } catch (HTTP403Exception e) {
                 Discord4J.logger.error("Received 403 error attempting to send message; is your login correct?");
                 return null;
@@ -237,7 +251,51 @@ public final class DiscordClient {
             return null;
         }
     }
-
+	
+	/**
+     * Edits a specified message. Currently, Discord only allows you to edit your own message
+     * 
+     * @param content   The new content of the message
+     * @param messageID The id of the message to edit
+     * @param channelID The channel the message exists in
+     * @throws ParseException
+     */
+    public void editMessage(String content, String messageID, String channelID) throws ParseException {
+        if (null != ws) {
+    
+            content = StringEscapeUtils.escapeJson(content);
+            
+            Channel channel = getChannelByID(channelID);
+            if (channel == null) {
+                Discord4J.logger.error("Channel id " +  channelID + " doesn't exist!");
+                return;
+            }
+            
+            Message oldMessage = channel.getMessageByID(messageID);
+            
+            try {
+                String response = Requests.PATCH.makeRequest(DiscordEndpoints.CHANNELS + channelID + "/messages/" + messageID, 
+                        new StringEntity("{\"content\":\"" + content + "\", \"mentions\":[]}", "UTF-8"), 
+                        new BasicNameValuePair("authorization", token),
+                        new BasicNameValuePair("content-type", "application/json"));
+    
+                JSONObject object1 = (JSONObject) JSON_PARSER.parse(response);
+    
+                Message newMessage = new Message((String) object1.get("id"), content, this.ourUser, getChannelByID(channelID), 
+                        this.convertFromTimestamp((String) object1.get("timestamp")));
+                //Event dispatched here because otherwise there'll be an NPE as for some reason when the bot edits a message,
+                // the event chain goes like this:
+                //Original message edited to null, then the null message edited to the new content
+                DiscordClient.this.dispatcher.dispatch(new MessageUpdateEvent(oldMessage, newMessage));
+            } catch (HTTP403Exception e) {
+                Discord4J.logger.error("Received 403 error attempting to send message; is your login correct?");
+            }
+    
+        } else {
+            Discord4J.logger.error("Bot has not signed in yet!");
+        }
+    }
+    
     /**
      * Deletes a message with given ID from provided channel ID.
      *
@@ -288,7 +346,23 @@ public final class DiscordClient {
         } catch (HTTP403Exception e) {
             Discord4J.logger.error("Received 403 error attempting to change account details; is your login correct?");
         }
-
+    }
+	
+	/**
+     * Changes the bot's presence
+     * 
+     * @param isIdle Set to true to make the bot idle or false for it to be online
+     * @param gameID The (optional) gameID of the game the bot is playing
+     */
+    public void updatePresence(boolean isIdle, Optional<Long> gameID) {
+        String json = "{\"op\":3,\"d\":{\"idle_since\":" + (isIdle ? System.currentTimeMillis() : "null") + 
+                ",\"game_id\":" + (gameID.isPresent() ? gameID.get() : "null") + "}}";
+        Discord4J.logger.debug(json); 
+        
+        ws.send(json);
+        
+        getOurUser().setPresence(isIdle ? Presences.IDLE : Presences.ONLINE);
+        getOurUser().setGameID(gameID.orElse(null));
     }
 
     /**
@@ -426,6 +500,56 @@ public final class DiscordClient {
 
         return null;
     }
+	
+	/**
+     * Attempts to get the name of the game based on its id
+     * 
+     * @param gameId The game id (nullable!)
+     * @return The game name, the Optional will be empty if the game couldn't be found
+     */
+    public Optional<String> getGameByID(Long gameId) {
+        if (games == null || gameId == null)
+            return Optional.empty();
+        
+        for (Object object : games) {
+            if (!(object instanceof JSONObject))
+                continue;
+            
+            JSONObject jsonObject = (JSONObject)object;
+            Long id = (Long) jsonObject.get("id");
+            if (id != null) {
+                if (id.equals(gameId))
+                    return Optional.ofNullable((String) jsonObject.get("name"));
+            }
+        }
+        
+        return Optional.empty();
+    }
+    
+    /**
+     * Attempts to get the id of a game based on its name
+     * 
+     * @param gameName The game name (nullable!)
+     * @return The game id, the Optional will be empty if the game couldn't be found
+     */
+    public Optional<Long> getGameIDByGame(String gameName) {
+        if (gameName == null || gameName.isEmpty() || gameName.equals("null"))
+            return Optional.empty();
+    
+        for (Object object : games) {
+            if (!(object instanceof JSONObject))
+                continue;
+        
+            JSONObject jsonObject = (JSONObject)object;
+            String name = (String) jsonObject.get("name");
+            if (name != null) {
+                if (name.equalsIgnoreCase(gameName))
+                    return Optional.ofNullable((Long) jsonObject.get("id"));
+            }
+        }
+    
+        return Optional.empty();
+    }
 
     /**
      * Returns a user from raw JSON data.
@@ -435,7 +559,10 @@ public final class DiscordClient {
         String username = (String) user.get("username");
         String avatar = (String) user.get("avatar");
 
-        return new User(username, id, avatar);
+        User ourUser = new User(username, id, avatar);
+        ourUser.setPresence(Presences.ONLINE);
+        
+        return ourUser;
     }
 
     class DiscordWS extends WebSocketClient {
@@ -490,9 +617,11 @@ public final class DiscordClient {
                             JSONArray presences = (JSONArray) guild.get("presences");
                             String name = (String) guild.get("name");
                             String guildID = (String) guild.get("id");
+                            String icon = (String) guild.get("icon");
+                            String owner = (String) guild.get("owner_id");
 
                             Guild g;
-                            guildList.add(g = new Guild(name, guildID));
+                            guildList.add(g = new Guild(name, guildID, icon, owner));
 
                             for (Object o1 : members) {
                                 JSONObject member = (JSONObject) ((JSONObject) o1).get("user");
@@ -503,6 +632,7 @@ public final class DiscordClient {
                                 JSONObject presence = (JSONObject) o1;
                                 User user = g.getUserByID((String) ((JSONObject) presence.get("user")).get("id"));
                                 user.setPresence(Presences.valueOf(((String) presence.get("status")).toUpperCase()));
+                                user.setGameID((Long) presence.get("game_id"));
                             }
 
                             for (Object o1 : channels) {
@@ -585,8 +715,8 @@ public final class DiscordClient {
                         if (null != channel) {
                             Message message1 = new Message(messageID, content, DiscordClient.get().getUserByID(id),
                                     channel, DiscordClient.get().convertFromTimestamp(time));
-                            channel.addMessage(message1);
                             if (!id.equalsIgnoreCase(DiscordClient.get().getOurUser().getID())) {
+                                channel.addMessage(message1);
                                 Discord4J.logger.debug("Message from: {} ({}) in channel ID {}: {}", username, id, channelID, content);
                                 if (content.contains("discord.gg/")) {
                                     String inviteCode = content.split("discord\\.gg/")[1].split(" ")[0];
@@ -624,7 +754,10 @@ public final class DiscordClient {
                         id = (String) d.get("id");
                         JSONArray members = (JSONArray) d.get("members");
                         JSONArray channels = (JSONArray) d.get("channels");
-                        Guild guild = new Guild(name, id);
+                        String icon = (String) d.get("icon");
+                        String owner = (String) d.get("owner_id");
+                        
+                        Guild guild = new Guild(name, id, icon, owner);
                         DiscordClient.this.guildList.add(guild);
 
                         for (Object o : members) {
@@ -680,6 +813,7 @@ public final class DiscordClient {
                         channel = DiscordClient.this.getChannelByID(channelID);
                         Message m = channel.getMessageByID(id);
                         if(null != m
+                                && !m.getAuthor().getID().equals(getOurUser().getID())
                                 && !m.getContent().equals(content)) {
                             Message newMessage;
                             int index = channel.getMessages().indexOf(m);
@@ -705,14 +839,22 @@ public final class DiscordClient {
 
                     case "PRESENCE_UPDATE":
                         Presences presences = Presences.valueOf(((String) d.get("status")).toUpperCase());
+                        Long gameId = (Long) d.get("game_id");
                         guild = getGuildByID((String) d.get("guild_id"));
                         if(null != guild
                                 && null != presences) {
                             user = guild.getUserByID((String)((JSONObject) d.get("user")).get("id"));
                             if(null != user) {
-                                dispatcher.dispatch(new PresenceUpdateEvent(guild, user, user.getPresence(), presences));
-                                user.setPresence(presences);
-                                Discord4J.logger.debug("User \"{}\" changed presence to {}.", user.getName(), user.getPresence());
+                                if (!user.getPresence().equals(presences)) {
+                                    dispatcher.dispatch(new PresenceUpdateEvent(guild, user, user.getPresence(), presences));
+                                    user.setPresence(presences);
+                                    Discord4J.logger.debug("User \"{}\" changed presence to {}", user.getName(), user.getPresence());
+                                }
+                                if (!user.getGameID().equals(Optional.ofNullable(gameId))) {
+                                    dispatcher.dispatch(new GameChangeEvent(guild, user, user.getGameID().isPresent() ? user.getGameID().get() : null, gameId));
+                                    user.setGameID(gameId);
+                                    Discord4J.logger.debug("User \"{}\" changed game to {}.", user.getName(), getGameByID(gameId).isPresent() ? getGameByID(gameId).get() : "null");
+                                }
                             }
                         }
                         break;
