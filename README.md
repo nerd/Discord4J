@@ -1,3 +1,5 @@
+#This project is no longer maintained. See [austinv11's fork](https://github.com/austinv11/Discord4J).
+
 # Discord4J  
 ![](https://travis-ci.org/nerd/Discord4J.svg)  
 Java interface for the unofficial [Discord](https://discordapp.com/) API, written in Java 8.
