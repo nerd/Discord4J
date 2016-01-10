@@ -192,6 +192,27 @@ public final class DiscordClient {
     }
 
     /**
+     * Logs you out from Discord.
+     * <p>
+     * Should be used on application termination.
+     */
+    public void logout()
+            throws IOException, ParseException, URISyntaxException {
+
+        if (null != ws) {
+            ws.close();
+
+            try {
+                 Requests.POST.makeRequest(DiscordEndpoints.LOGOUT, new BasicNameValuePair("authorization", token));
+            } catch (HTTP403Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            Discord4J.logger.error("Bot has not signed in yet!");
+        }
+    }
+
+    /**
      * Gets the WebSocket gateway
      *
      * @param token Our login token
